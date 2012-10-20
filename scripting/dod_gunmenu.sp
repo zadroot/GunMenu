@@ -16,10 +16,7 @@
 
 // ====[ CONSTANTS ]===================================================
 #define PLUGIN_NAME        "DoD:S GunMenu"
-#define PLUGIN_AUTHOR      "Root"
-#define PLUGIN_DESCRIPTION "Lets players select from a menu of allowed weapons"
 #define PLUGIN_VERSION     "1.0"
-#define PLUGIN_CONTACT     "http://steamcommunity.com/id/zadroot/"
 
 #define DOD_MAXPLAYERS       33
 #define PRIMARY_WEAPON_COUNT 12
@@ -37,8 +34,7 @@ enum Slots
 };
 
 // ====[ VARIABLES ]===================================================
-new Handle:gunmenu_version = INVALID_HANDLE,
-	Handle:gunmenu_enable = INVALID_HANDLE;
+new Handle:gunmenu_enable = INVALID_HANDLE;
 
 new g_Ammo_Offset,
 	g_configLevel,
@@ -47,31 +43,31 @@ new g_Ammo_Offset,
 	g_MeleeCount,
 	g_GrenadesCount;
 
-new String:g_PrimaryGuns[PRIMARY_WEAPON_COUNT][32],
+new String:g_PrimaryGuns  [PRIMARY_WEAPON_COUNT][32],
 	String:g_SecondaryGuns[DEFAULT_WEAPON_COUNT][32],
-	String:g_MeleeWeapons[DEFAULT_WEAPON_COUNT][32],
-	String:g_Grenades[DEFAULT_WEAPON_COUNT][32];
+	String:g_MeleeWeapons [DEFAULT_WEAPON_COUNT][32],
+	String:g_Grenades     [DEFAULT_WEAPON_COUNT][32];
 
 new bool:g_MenuOpen[DOD_MAXPLAYERS] = {false, ...};
 
-new g_PlayerPrimary[DOD_MAXPLAYERS],
+new g_PlayerPrimary  [DOD_MAXPLAYERS],
 	g_PlayerSecondary[DOD_MAXPLAYERS],
-	g_PlayerMelee[DOD_MAXPLAYERS],
-	g_PlayerGrenades[DOD_MAXPLAYERS];
+	g_PlayerMelee    [DOD_MAXPLAYERS],
+	g_PlayerGrenades [DOD_MAXPLAYERS];
 
-new Handle:g_PrimaryMenu = INVALID_HANDLE,
+new Handle:g_PrimaryMenu   = INVALID_HANDLE,
 	Handle:g_SecondaryMenu = INVALID_HANDLE,
-	Handle:g_MeleeMenu = INVALID_HANDLE,
-	Handle:g_GrenadesMenu = INVALID_HANDLE;
+	Handle:g_MeleeMenu     = INVALID_HANDLE,
+	Handle:g_GrenadesMenu  = INVALID_HANDLE;
 
 // ====[ PLUGIN ]======================================================
 public Plugin:myinfo =
 {
 	name			= PLUGIN_NAME,
-	author			= PLUGIN_AUTHOR,
-	description		= PLUGIN_DESCRIPTION,
+	author			= "Root",
+	description		= "Lets players select from a menu of allowed weapons",
 	version			= PLUGIN_VERSION,
-	url				= PLUGIN_CONTACT
+	url				= "http://dodsplugins.com/"
 };
 
 
@@ -93,8 +89,8 @@ public Plugin:myinfo =
 public OnPluginStart()
 {
 	// Create ConVars
-	gunmenu_version    = CreateConVar("dod_gunmenu_version",  PLUGIN_VERSION, PLUGIN_NAME, FCVAR_NOTIFY|FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED);
-	gunmenu_enable     = CreateConVar("sm_gunmenu_enable",    "1", "Enable or disable plugin", FCVAR_PLUGIN|FCVAR_NOTIFY, true, 0.0, true, 1.0);
+	CreateConVar("dod_gunmenu_version",  PLUGIN_VERSION, PLUGIN_NAME, FCVAR_NOTIFY|FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED);
+	gunmenu_enable = CreateConVar("sm_gunmenu_enable",    "1", "Enable or disable plugin", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
 	// Create/register console commands
 	RegConsoleCmd("guns",    Command_GunMenu);
@@ -119,13 +115,11 @@ public OnPluginStart()
  * --------------------------------------------------------------------- */
 public OnConVarChange(Handle:convar, const String:oldValue[], const String:newValue[])
 {
-	if (strcmp(oldValue, newValue) != 0)
+	switch (StringToInt(newValue))
 	{
 		// If plugin is disabled - unhook spawn event, because at this event plugin re-equip each player
-		if (strcmp(newValue, "0") == 0)
-			UnhookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
-		else /* Or hook if enabled */
-			HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
+		case 0: UnhookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
+		case 1: HookEvent  ("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 	}
 }
 
@@ -137,9 +131,6 @@ public OnMapStart()
 {
 	// Checking GunMenu config
 	CheckConfig("configs/weapons.ini");
-
-	// Work around A2S_RULES bug in linux orangebox
-	SetConVarString(gunmenu_version, PLUGIN_VERSION);
 }
 
 /* OnClientPutInServer()
@@ -149,25 +140,25 @@ public OnMapStart()
 public OnClientPutInServer(client)
 {
 	// If plugin is disabled - skip event
-	if (!GetConVarBool(gunmenu_enable))
-		return;
-
-	// To prevent some issues - check if client is in game
-	if (IsClientInGame(client))
+	if (GetConVarBool(gunmenu_enable))
 	{
-		// Disable menu, because we will show it when client spawned
-		g_MenuOpen[client] = false;
-
-		// Show menu to humans
-		if (!IsFakeClient(client))
+		// To prevent some issues - check if client is in game
+		if (IsClientInGame(client))
 		{
-			g_PlayerPrimary[client]   = SHOW_MENU;
-			g_PlayerSecondary[client] = SHOW_MENU;
-			g_PlayerMelee[client]     = SHOW_MENU;
-			g_PlayerGrenades[client]  = SHOW_MENU;
+			// Disable menu, because we will show it when client spawned
+			g_MenuOpen[client] = false;
+
+			// Show menu to humans
+			if (!IsFakeClient(client))
+			{
+				g_PlayerPrimary[client]   = SHOW_MENU;
+				g_PlayerSecondary[client] = SHOW_MENU;
+				g_PlayerMelee[client]     = SHOW_MENU;
+				g_PlayerGrenades[client]  = SHOW_MENU;
+			}
+			// Give random weapons to a bots
+			else g_PlayerPrimary[client]  = RANDOM_WEAPON;
 		}
-		// Give random weapons to a bots
-		else g_PlayerPrimary[client]  = RANDOM_WEAPON;
 	}
 }
 
@@ -189,31 +180,31 @@ public OnClientPutInServer(client)
  * --------------------------------------------------------------------- */
 public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
 {
-	if (!GetConVarBool(gunmenu_enable))
-		return;
-
-	new client = GetClientOfUserId(GetEventInt(event, "userid"));
-	if (IsValidClient(client))
+	if (GetConVarBool(gunmenu_enable))
 	{
-		// Show menu if client not choose weapons yet
-		if (g_PlayerPrimary[client] == SHOW_MENU && g_PlayerSecondary[client] == SHOW_MENU && g_PlayerMelee[client] == SHOW_MENU && g_PlayerGrenades[client] == SHOW_MENU)
+		new client = GetClientOfUserId(GetEventInt(event, "userid"));
+		if (IsValidClient(client))
 		{
-			// Check if menu is valid (i.e have any weapon(s) in a config)
-			if (g_PrimaryMenu != INVALID_HANDLE)
-				DisplayMenu(g_PrimaryMenu, client, MENU_TIME_FOREVER);
-			else if (g_SecondaryMenu != INVALID_HANDLE)
-				DisplayMenu(g_SecondaryMenu, client, MENU_TIME_FOREVER);
-			else if (g_MeleeMenu != INVALID_HANDLE)
-				DisplayMenu(g_MeleeMenu, client, MENU_TIME_FOREVER);
-			else if (g_GrenadesMenu != INVALID_HANDLE)
-				DisplayMenu(g_GrenadesMenu, client, MENU_TIME_FOREVER);
-		}
-		else /* Otherwise give chosen guns to a player */
-		{
-			GivePrimary(client);
-			GiveSecondary(client);
-			GiveMelee(client);
-			GiveGrenades(client);
+			// Show menu if client not choose weapons yet
+			if (g_PlayerPrimary[client] == SHOW_MENU && g_PlayerSecondary[client] == SHOW_MENU && g_PlayerMelee[client] == SHOW_MENU && g_PlayerGrenades[client] == SHOW_MENU)
+			{
+				// Check if menu is valid (i.e have any weapon(s) in a config)
+				if (g_PrimaryMenu != INVALID_HANDLE)
+					DisplayMenu(g_PrimaryMenu, client, MENU_TIME_FOREVER);
+				else if (g_SecondaryMenu != INVALID_HANDLE)
+					DisplayMenu(g_SecondaryMenu, client, MENU_TIME_FOREVER);
+				else if (g_MeleeMenu != INVALID_HANDLE)
+					DisplayMenu(g_MeleeMenu, client, MENU_TIME_FOREVER);
+				else if (g_GrenadesMenu != INVALID_HANDLE)
+					DisplayMenu(g_GrenadesMenu, client, MENU_TIME_FOREVER);
+			}
+			else /* Otherwise give chosen guns to a player */
+			{
+				GivePrimary(client);
+				GiveSecondary(client);
+				GiveMelee(client);
+				GiveGrenades(client);
+			}
 		}
 	}
 }
@@ -225,15 +216,15 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
 public Event_PlayerTeam(Handle:event, const String:name[], bool:dontBroadcast)
 {
 	// Dont check teamchange if plugin is disabled
-	if (!GetConVarBool(gunmenu_enable))
-		return;
-
-	// Close any gun menus if player spectating
-	new client = GetClientOfUserId(GetEventInt(event, "userid"));
-	if (g_MenuOpen[client] && IsClientObserver(client))
+	if (GetConVarBool(gunmenu_enable))
 	{
-		CancelClientMenu(client);
-		g_MenuOpen[client] = false;
+		// Close any gun menus if player spectating
+		new client = GetClientOfUserId(GetEventInt(event, "userid"));
+		if (g_MenuOpen[client] && IsClientObserver(client))
+		{
+			CancelClientMenu(client);
+			g_MenuOpen[client] = false;
+		}
 	}
 }
 
@@ -282,7 +273,7 @@ public Action:Command_GunMenu(client, args)
  *
  * Create menus if config is valid.
  * --------------------------------------------------------------------- */
-public InitializeMenus()
+InitializeMenus()
 {
 	// To prepare menus we should first reset amount of weapons
 	g_PrimaryGunCount = 0;
@@ -457,7 +448,7 @@ public MenuHandler_ChooseGrenades(Handle:menu, MenuAction:action, param1, param2
  *
  * Removing old weapon and replaces to a new one.
  * --------------------------------------------------------------------- */
-public GivePrimary(client)
+GivePrimary(client)
 {
 	new weapon = g_PlayerPrimary[client];
 
@@ -471,7 +462,7 @@ public GivePrimary(client)
 	}
 }
 
-public GiveSecondary(client)
+GiveSecondary(client)
 {
 	new weapon = g_PlayerSecondary[client];
 	if (weapon == RANDOM_WEAPON) weapon = GetRandomInt(0, g_SecondaryGunCount-1);
@@ -486,7 +477,7 @@ public GiveSecondary(client)
 	}
 }
 
-public GiveMelee(client)
+GiveMelee(client)
 {
 	new weapon = g_PlayerMelee[client];
 	if (weapon > 0 && weapon <= g_MeleeCount)
@@ -498,7 +489,7 @@ public GiveMelee(client)
 	}
 }
 
-public GiveGrenades(client)
+GiveGrenades(client)
 {
 	new weapon = g_PlayerGrenades[client];
 
@@ -517,7 +508,7 @@ public GiveGrenades(client)
  *
  * Adds magazines to a specified weapons.
  * --------------------------------------------------------------------- */
-public SetAmmo(client, Slots:slot)
+SetAmmo(client, Slots:slot)
 {
 	new weapon = GetPlayerWeaponSlot(client, _:slot);
 
@@ -553,7 +544,7 @@ public SetAmmo(client, Slots:slot)
  *
  * Remove's player weapon by slot.
  * --------------------------------------------------------------------- */
-public RemoveWeaponBySlot(client, Slots:slot)
+RemoveWeaponBySlot(client, Slots:slot)
 {
 	// Checking slot
 	new weapon = GetPlayerWeaponSlot(client, _:slot);
@@ -583,7 +574,7 @@ public RemoveWeaponBySlot(client, Slots:slot)
  *
  * Parses a config file.
  * --------------------------------------------------------------------- */
-public bool:ParseConfigFile(const String:file[])
+bool:ParseConfigFile(const String:file[])
 {
 	// Create parser with all sections (start & end)
 	new Handle:parser = SMC_CreateParser();
@@ -764,7 +755,7 @@ public Config_End(Handle:parser, bool:halted, bool:failed)
  *
  * Checks GunMenu config file from sourcemod/configs directory.
  * --------------------------------------------------------------------- */
-public CheckConfig(const String:ini_file[])
+CheckConfig(const String:ini_file[])
 {
 	// Loads config from sourcemod/configs dir
 	decl String:file[PLATFORM_MAX_PATH];
@@ -779,7 +770,7 @@ public CheckConfig(const String:ini_file[])
  *
  * Checks if handle is closed or not and close handle.
  * --------------------------------------------------------------------- */
-public CheckCloseHandle(&Handle:handle)
+CheckCloseHandle(&Handle:handle)
 {
 	// Close handle if not closed yet
 	if (handle != INVALID_HANDLE)
@@ -793,7 +784,7 @@ public CheckCloseHandle(&Handle:handle)
  *
  * Checks if a client is valid.
  * --------------------------------------------------------------------- */
-public bool:IsValidClient(client)
+bool:IsValidClient(client)
 {
 	// Since its a boolean, we should return a value
 	return (client > 0 && IsClientInGame(client) && IsPlayerAlive(client) && GetClientTeam(client) > TEAM_SPECTATOR) ? true : false;
