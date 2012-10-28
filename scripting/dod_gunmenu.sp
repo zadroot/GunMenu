@@ -62,11 +62,11 @@ new g_PlayerPrimary  [DOD_MAXPLAYERS],
 // ====[ PLUGIN ]======================================================
 public Plugin:myinfo =
 {
-	name			= PLUGIN_NAME,
-	author			= "Root",
-	description		= "Lets players select from a menu of allowed weapons",
-	version			= PLUGIN_VERSION,
-	url				= "http://dodsplugins.com/"
+	name        = PLUGIN_NAME,
+	author      = "Root",
+	description = "Provides a menu to choose allowed weapons which are automatically given at respawn",
+	version     = PLUGIN_VERSION,
+	url         = "http://dodsplugins.com/"
 };
 
 
@@ -118,7 +118,7 @@ public OnConVarChange(Handle:convar, const String:oldValue[], const String:newVa
 		// If plugin is disabled - unhook spawn event, because at this event plugin re-equip each player
 		case 0: UnhookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 
-		// Otherwise hook spawn event again
+		// Otherwise hook respawn event again
 		case 1: HookEvent  ("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 	}
 }
@@ -337,7 +337,7 @@ public MenuHandler_ChoosePrimary(Handle:menu, MenuAction:action, param1, param2)
 			// If client pressed something, call menu with secondary weapons immediate
 			DisplayMenu(g_SecondaryMenu, client, MENU_TIME_FOREVER);
 		}
-		case MenuAction_Cancel, MenuAction_End:
+		case MenuAction_Cancel:
 		{
 			g_MenuOpen[param1] = false;
 			if (param2 == MenuCancel_Exit) // CancelClientMenu sends MenuCancel_Interrupted reason
@@ -371,7 +371,7 @@ public MenuHandler_ChooseSecondary(Handle:menu, MenuAction:action, param1, param
 
 			DisplayMenu(g_MeleeMenu, client, MENU_TIME_FOREVER);
 		}
-		case MenuAction_Cancel, MenuAction_End: /* When client pressed 0 */
+		case MenuAction_Cancel: /* When client pressed 0 */
 		{
 			// Close a menu with secondary weapons
 			g_MenuOpen[param1] = false;
@@ -407,7 +407,7 @@ public MenuHandler_ChooseMelee(Handle:menu, MenuAction:action, param1, param2)
 
 			DisplayMenu(g_GrenadesMenu, client, MENU_TIME_FOREVER);
 		}
-		case MenuAction_Cancel, MenuAction_End:
+		case MenuAction_Cancel:
 		{
 			g_MenuOpen[param1] = false;
 
@@ -441,7 +441,7 @@ public MenuHandler_ChooseGrenades(Handle:menu, MenuAction:action, param1, param2
 			g_PlayerGrenades[client] = weapon;
 			GiveGrenades(client);
 		}
-		case MenuAction_Cancel, MenuAction_End:
+		case MenuAction_Cancel:
 		{
 			// And now we can close menu at all
 			g_MenuOpen[param1] = false;
@@ -743,7 +743,7 @@ public SMCResult:Config_EndSection(Handle:parser)
 	// Config is ready - return to original level
 	g_configLevel--;
 
-	// I prefer textparse, because there is possible to add/remove weapons/sections with no errors
+	// I prefer textparse, because there is possible to easy add/remove weapons/sections with no issues
 	SMC_SetReaders(parser, Config_NewSection, Config_UnknownKeyValue, Config_EndSection);
 	return SMCParse_Continue;
 }
@@ -776,11 +776,11 @@ public Config_End(Handle:parser, bool:halted, bool:failed)
  * --------------------------------------------------------------------- */
 CheckConfig(const String:ini_file[])
 {
-	// Loads weapon config from sourcemod/configs dir
+	// Loads weapon config from sourcemod/configs directory
 	decl String:file[PLATFORM_MAX_PATH];
 	BuildPath(Path_SM, file, sizeof(file), ini_file);
 
-	// Create menus and parse a config
+	// Create menus and parse a config then
 	InitializeMenus();
 	ParseConfigFile(file);
 }
