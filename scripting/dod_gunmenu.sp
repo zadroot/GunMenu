@@ -8,16 +8,16 @@
 * Changelog & more info at http://goo.gl/4nKhJ
 */
 
-#pragma semicolon 1 // We like semicolon
+#pragma semicolon 1
 
-// ====[ INCLUDES ]====================================================
-#include <sourcemod>
+// ====[ INCLUDES ]======================================================
 #include <sdktools>
 
-// ====[ CONSTANTS ]===================================================
+// ====[ CONSTANTS ]=====================================================
 #define PLUGIN_NAME          "DoD:S GunMenu"
 #define PLUGIN_VERSION       "1.1"
 
+#define PLUGIN_CONFIG        "configs/weapons.ini"
 #define DOD_MAXPLAYERS       33
 #define PRIMARY_WEAPON_COUNT 12
 #define DEFAULT_WEAPON_COUNT 4
@@ -33,7 +33,7 @@ enum Slots
 	Slot_Grenade
 };
 
-// ====[ VARIABLES ]===================================================
+// ====[ VARIABLES ]=====================================================
 new	Handle:gunmenu_enable  = INVALID_HANDLE,
 	Handle:g_PrimaryMenu   = INVALID_HANDLE,
 	Handle:g_SecondaryMenu = INVALID_HANDLE,
@@ -52,14 +52,14 @@ new	String:g_PrimaryGuns  [PRIMARY_WEAPON_COUNT][32],
 	String:g_MeleeWeapons [DEFAULT_WEAPON_COUNT][32],
 	String:g_Grenades     [DEFAULT_WEAPON_COUNT][32];
 
-new	bool:g_MenuOpen[DOD_MAXPLAYERS] = {false, ...};
+new	bool:g_MenuOpen[DOD_MAXPLAYERS + 1] = {false, ...};
 
-new	g_PlayerPrimary  [DOD_MAXPLAYERS],
-	g_PlayerSecondary[DOD_MAXPLAYERS],
-	g_PlayerMelee    [DOD_MAXPLAYERS],
-	g_PlayerGrenades [DOD_MAXPLAYERS];
+new	g_PlayerPrimary  [DOD_MAXPLAYERS + 1],
+	g_PlayerSecondary[DOD_MAXPLAYERS + 1],
+	g_PlayerMelee    [DOD_MAXPLAYERS + 1],
+	g_PlayerGrenades [DOD_MAXPLAYERS + 1];
 
-// ====[ PLUGIN ]======================================================
+// ====[ PLUGIN ]========================================================
 public Plugin:myinfo =
 {
 	name        = PLUGIN_NAME,
@@ -71,32 +71,32 @@ public Plugin:myinfo =
 
 
 /**
- * --------------------------------------------------------------------
+ * ----------------------------------------------------------------------
  *     ____           ______                  __  _
  *    / __ \____     / ____/__  ______  _____/ /_(_)____  ____  _____
  *   / / / / __ \   / /_   / / / / __ \/ ___/ __/ // __ \/ __ \/ ___/
  *  / /_/ / / / /  / __/  / /_/ / / / / /__/ /_/ // /_/ / / / (__  )
  *  \____/_/ /_/  /_/     \__,_/_/ /_/\___/\__/_/ \____/_/ /_/____/
  *
- * --------------------------------------------------------------------
+ * ----------------------------------------------------------------------
 */
 
 /* OnPluginStart()
  *
  * When the plugin starts up.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public OnPluginStart()
 {
-	// Create ConVars
-	CreateConVar("dod_gunmenu_version", PLUGIN_VERSION, PLUGIN_NAME, FCVAR_NOTIFY|FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED);
-	gunmenu_enable = CreateConVar("sm_gunmenu_enable", "1", "Whether or not enable GunMenu", FCVAR_PLUGIN, true, 0.0, true, 1.0);
+	// Create plugin ConVars
+	CreateConVar("dod_gunmenu_version", PLUGIN_VERSION, PLUGIN_NAME, FCVAR_NOTIFY|FCVAR_DONTRECORD);
+	gunmenu_enable = CreateConVar("sm_gunmenu_enable", "1", "Whether or not enable GunMenu plugin", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
-	// Create/register console commands
+	// Create/register gunmenu commands
 	RegConsoleCmd("guns",    Command_GunMenu);
 	RegConsoleCmd("weapons", Command_GunMenu);
 	RegConsoleCmd("gunmenu", Command_GunMenu);
 
-	// Hook convar changes and events
+	// Hook single ConVar changes
 	HookConVarChange(gunmenu_enable, OnConVarChange);
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 	HookEvent("player_team",  Event_PlayerTeam);
@@ -109,43 +109,43 @@ public OnPluginStart()
 /* OnConVarChange()
  *
  * Called when a convar's value is changed.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public OnConVarChange(Handle:convar, const String:oldValue[], const String:newValue[])
 {
 	// Convert a string to an integer
 	switch (StringToInt(newValue))
 	{
 		// If plugin is disabled - unhook spawn event, because at this event plugin re-equip each player
-		case 0: UnhookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
+		case false: UnhookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 
-		// Otherwise hook respawn event again
-		case 1: HookEvent  ("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
+		// Otherwise hook respawn event back
+		case true: HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 	}
 }
 
 /* OnMapStart()
  *
  * When the map starts.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public OnMapStart()
 {
 	// Checking GunMenu config
-	CheckConfig("configs/weapons.ini");
+	CheckConfig(PLUGIN_CONFIG);
 }
 
 /* OnClientPutInServer()
  *
  * Called when a client is entering the game.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public OnClientPutInServer(client)
 {
-	// If plugin is disabled - skip event
+	// If plugin is disabled - skip it
 	if (GetConVarBool(gunmenu_enable))
 	{
-		// To prevent some issues check if client is in game
+		// To prevent some issues make sure client is joined
 		if (IsClientInGame(client))
 		{
-			// Disable menu, because we will show it when client spawned
+			// Disable menu, because we will show it when client spawned, not joined
 			g_MenuOpen[client] = false;
 
 			// Show menu to humans
@@ -157,28 +157,28 @@ public OnClientPutInServer(client)
 				g_PlayerGrenades[client]  = SHOW_MENU;
 			}
 
-			// Give random weapons to a bots
-			else g_PlayerPrimary[client]  = RANDOM_WEAPON;
+			// Give random weapons to bots
+			else g_PlayerPrimary[client] = RANDOM_WEAPON;
 		}
 	}
 }
 
 
 /**
- * --------------------------------------------------------------------
+ * ----------------------------------------------------------------------
  *      ______                  __
  *     / ____/_   _____  ____  / /______
  *    / __/  | | / / _ \/ __ \/ __/ ___/
  *   / /___  | |/ /  __/ / / / /_(__  )
  *  /_____/  |___/\___/_/ /_/\__/____/
  *
- * --------------------------------------------------------------------
+ * ----------------------------------------------------------------------
 */
 
 /* Event_player_spawn()
  *
  * Called when a player spawns.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
 {
 	// Skip event if plugin is disabled
@@ -186,7 +186,7 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
 	{
 		new client = GetClientOfUserId(GetEventInt(event, "userid"));
 
-		// Plugin should work only with valid client
+		// Plugin should work only with valid clients
 		if (IsValidClient(client))
 		{
 			// Show menu if client not choose weapons yet
@@ -221,7 +221,7 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
 /* Event_player_team()
  *
  * Called when a player has switched team.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public Event_PlayerTeam(Handle:event, const String:name[], bool:dontBroadcast)
 {
 	// Dont check teamchange if plugin is disabled
@@ -239,20 +239,20 @@ public Event_PlayerTeam(Handle:event, const String:name[], bool:dontBroadcast)
 
 
 /**
- * --------------------------------------------------------------------
+ * ----------------------------------------------------------------------
  *      __  ___
  *     /  |/  /___  ___  __  ________
  *    / /|_/ / _ \/ __ \/ / / // ___/
  *   / /  / /  __/ / / / /_/ /(__  )
  *  /_/  /_/\___/_/ /_/\__,_/_____/
  *
- * --------------------------------------------------------------------
+ * ----------------------------------------------------------------------
 */
 
 /* Command_GunMenu()
  *
  * Show gun menu to a player.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public Action:Command_GunMenu(client, args)
 {
 	// Plugin disabled - GunMenu disabled
@@ -270,7 +270,7 @@ public Action:Command_GunMenu(client, args)
 			/* with melee */
 			else if (g_MeleeMenu != INVALID_HANDLE)
 				DisplayMenu(g_MeleeMenu, client, MENU_TIME_FOREVER);
-			/* & grenades */
+			/* and grenades */
 			else if (g_GrenadesMenu != INVALID_HANDLE)
 				DisplayMenu(g_GrenadesMenu, client, MENU_TIME_FOREVER);
 		}
@@ -281,7 +281,7 @@ public Action:Command_GunMenu(client, args)
 /* InitializeMenus()
  *
  * Create menus if config is valid.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 InitializeMenus()
 {
 	// To prepare menus we should first reset amount of weapons
@@ -315,7 +315,7 @@ InitializeMenus()
 /* MenuHandler_ChoosePrimary()
  *
  * Menu to set player's primary weapon.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public MenuHandler_ChoosePrimary(Handle:menu, MenuAction:action, param1, param2)
 {
 	// Display a menu
@@ -352,7 +352,7 @@ public MenuHandler_ChoosePrimary(Handle:menu, MenuAction:action, param1, param2)
 /* MenuHandler_ChooseSecondary()
  *
  * Menu to set player's secondary weapon.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public MenuHandler_ChooseSecondary(Handle:menu, MenuAction:action, param1, param2)
 {
 	switch (action)
@@ -387,7 +387,7 @@ public MenuHandler_ChooseSecondary(Handle:menu, MenuAction:action, param1, param
 /* MenuHandler_ChooseMelee()
  *
  * Menu to set player's melee weapon.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public MenuHandler_ChooseMelee(Handle:menu, MenuAction:action, param1, param2)
 {
 	switch (action)
@@ -411,7 +411,7 @@ public MenuHandler_ChooseMelee(Handle:menu, MenuAction:action, param1, param2)
 		{
 			g_MenuOpen[param1] = false;
 
-			// Client pressed exit on a melee weapon menu - call last grenade menu
+			// Client pressed exit on a melee weapon menu, call last grenade menu
 			if (param2 == MenuCancel_Exit)
 			{
 				// Call only if menu is valid (ie config have Grenades section)
@@ -425,7 +425,7 @@ public MenuHandler_ChooseMelee(Handle:menu, MenuAction:action, param1, param2)
 /* MenuHandler_ChooseGrenades()
  *
  * Menu to set grenades.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public MenuHandler_ChooseGrenades(Handle:menu, MenuAction:action, param1, param2)
 {
 	switch (action)
@@ -451,20 +451,20 @@ public MenuHandler_ChooseGrenades(Handle:menu, MenuAction:action, param1, param2
 
 
 /**
- * --------------------------------------------------------------------
+ * ----------------------------------------------------------------------
  *    _    __    __
  *   | |  /  |  / /___  ____ _____  ____  ____  _____
  *   | | / / | / // _ \/ __ `/ __ \/ __ \/ __ \/ ___/
  *   | |/ /| |/ //  __/ /_/ / /_/ / /_/ / / / (__  )
  *   |___/ |___/ \___/\__,_/ .___/\____/_/ /_/____/
  *                        /_/
- * --------------------------------------------------------------------
+ * ----------------------------------------------------------------------
 */
 
 /* GiveWeapon()
  *
  * Removing old weapon and replaces to a new one.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 GivePrimary(client)
 {
 	// Get weapons from config file
@@ -525,7 +525,7 @@ GiveGrenades(client)
 /* SetAmmo()
  *
  * Adds magazines to a specified weapons.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 SetAmmo(client, Slots:slot)
 {
 	// Returns the weapon in a player's slot
@@ -562,7 +562,7 @@ SetAmmo(client, Slots:slot)
 /* RemoveWeaponBySlot()
  *
  * Remove's player weapon by slot.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 RemoveWeaponBySlot(client, Slots:slot)
 {
 	// Checking slot
@@ -579,20 +579,20 @@ RemoveWeaponBySlot(client, Slots:slot)
 
 
 /**
- * --------------------------------------------------------------------
+ * ----------------------------------------------------------------------
  *     ______            _____
  *    / ____/___  ____  / __(_)___ _
  *   / /   / __ \/ __ \/ /_/ / __ `/
  *  / /___/ /_/ / / / / __/ / /_/ /
  *  \____/\____/_/ /_/_/ /_/\__, /
  *                         /____/
- * --------------------------------------------------------------------
+ * ----------------------------------------------------------------------
 */
 
 /* ParseConfigFile()
  *
  * Parses a config file.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 bool:ParseConfigFile(const String:file[])
 {
 	// Create parser with all sections (start & end)
@@ -613,7 +613,7 @@ bool:ParseConfigFile(const String:file[])
 	if (result != SMCError_Okay)
 	{
 		SMC_GetErrorString(result, error, sizeof(error));
-		LogError("%s @ line %d, col %d of %s", error, line, col, file);
+		LogError("%s at line %d, col %d of %s", error, line, col, file);
 	}
 	return (result == SMCError_Okay);
 }
@@ -621,7 +621,7 @@ bool:ParseConfigFile(const String:file[])
 /* Config_NewSection()
  *
  * Called when the parser is entering a new section or sub-section.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:quotes)
 {
 	// Ignore first config level (GunMenu Weapons)
@@ -652,29 +652,29 @@ public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:q
 /* Config_UnknownKeyValue()
  *
  * Called when the parser finds a new key/value pair.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public SMCResult:Config_UnknownKeyValue(Handle:parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes)
 {
 	// Log an error if unknown key value found in a config file
-	SetFailState("\nDidn't recognize configuration: %s = %s", key, value);
+	SetFailState("Didn't recognize configuration: %s = %s", key, value);
 	return SMCParse_Continue;
 }
 
 /* Config_PrimaryKeyValue()
  *
  * Called when the parser finds a primary key/value pair.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public SMCResult:Config_PrimaryKeyValue(Handle:parser, const String:weapon_class[], const String:weapon_name[], bool:key_quotes, bool:value_quotes)
 {
 	// Weapons should not exceed real value
 	if (g_PrimaryGunCount > PRIMARY_WEAPON_COUNT)
-		SetFailState("\nToo many weapons declared!");
+		SetFailState("Too many weapons declared!");
 
 	decl String:weapon_id[4];
 
 	// Copies one string to another string
 	strcopy(g_PrimaryGuns[g_PrimaryGunCount], sizeof(g_PrimaryGuns[]), weapon_class);
-	Format(weapon_id, sizeof(weapon_id), "%02.2X", g_PrimaryGunCount++);
+	FormatEx(weapon_id, sizeof(weapon_id), "%02.2X", g_PrimaryGunCount++);
 	AddMenuItem(g_PrimaryMenu, weapon_id, weapon_name);
 	return SMCParse_Continue;
 }
@@ -682,17 +682,17 @@ public SMCResult:Config_PrimaryKeyValue(Handle:parser, const String:weapon_class
 /* Config_SecondaryKeyValue()
  *
  * Called when the parser finds a secondary key/value pair.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public SMCResult:Config_SecondaryKeyValue(Handle:parser, const String:weapon_class[], const String:weapon_name[], bool:key_quotes, bool:value_quotes)
 {
 	if (g_SecondaryGunCount > DEFAULT_WEAPON_COUNT)
-		SetFailState("\nToo many weapons declared!");
+		SetFailState("Too many weapons declared!");
 
 	decl String:weapon_id[4];
 	strcopy(g_SecondaryGuns[g_SecondaryGunCount], sizeof(g_SecondaryGuns[]), weapon_class);
 
-	// Calculate number of avalible secondary weapons
-	Format(weapon_id, sizeof(weapon_id), "%02.2X", g_SecondaryGunCount++);
+	// Calculate number of avaliable secondary weapons
+	FormatEx(weapon_id, sizeof(weapon_id), "%02.2X", g_SecondaryGunCount++);
 	AddMenuItem(g_SecondaryMenu, weapon_id, weapon_name);
 	return SMCParse_Continue;
 }
@@ -700,15 +700,15 @@ public SMCResult:Config_SecondaryKeyValue(Handle:parser, const String:weapon_cla
 /* Config_MeleeKeyValue()
  *
  * Called when the parser finds a melee key/value pair.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public SMCResult:Config_MeleeKeyValue(Handle:parser, const String:weapon_class[], const String:weapon_name[], bool:key_quotes, bool:value_quotes)
 {
 	if (g_MeleeCount > DEFAULT_WEAPON_COUNT)
-		SetFailState("\nToo many weapons declared!");
+		SetFailState("Too many weapons declared!");
 
 	decl String:weapon_id[4];
 	strcopy(g_MeleeWeapons[g_MeleeCount], sizeof(g_MeleeWeapons[]), weapon_class);
-	Format(weapon_id, sizeof(weapon_id), "%02.2X", g_MeleeCount++);
+	FormatEx(weapon_id, sizeof(weapon_id), "%02.2X", g_MeleeCount++);
 
 	// Add every weapon as menu item
 	AddMenuItem(g_MeleeMenu, weapon_id, weapon_name);
@@ -718,16 +718,16 @@ public SMCResult:Config_MeleeKeyValue(Handle:parser, const String:weapon_class[]
 /* Config_GrenadeKeyValue()
  *
  * Called when the parser finds a grenade's key/value pair.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public SMCResult:Config_GrenadeKeyValue(Handle:parser, const String:weapon_class[], const String:weapon_name[], bool:key_quotes, bool:value_quotes)
 {
 	if (g_GrenadesCount > DEFAULT_WEAPON_COUNT)
-		SetFailState("\nToo many weapons declared!");
+		SetFailState("Too many weapons declared!");
 
-	// If grenades aren't avalible at all, dont add greandes in a menu
+	// If grenades aren't avaliable at all, dont add greandes in a menu
 	decl String:weapon_id[4];
 	strcopy(g_Grenades[g_GrenadesCount], sizeof(g_Grenades[]), weapon_class);
-	Format(weapon_id, sizeof(weapon_id), "%02.2X", g_GrenadesCount++);
+	FormatEx(weapon_id, sizeof(weapon_id), "%02.2X", g_GrenadesCount++);
 	AddMenuItem(g_GrenadesMenu, weapon_id, weapon_name);
 
 	// @return
@@ -737,7 +737,7 @@ public SMCResult:Config_GrenadeKeyValue(Handle:parser, const String:weapon_class
 /* Config_EndSection()
  *
  * Called when the parser finds the end of the current section.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public SMCResult:Config_EndSection(Handle:parser)
 {
 	// Config is ready - return to original level
@@ -751,29 +751,29 @@ public SMCResult:Config_EndSection(Handle:parser)
 /* Config_End()
  *
  * Called when the config is ready.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 public Config_End(Handle:parser, bool:halted, bool:failed)
 {
 	// Failed to load config. Maybe we missed a braket or something?
-	if (failed) SetFailState("\nPlugin configuration error");
+	if (failed) SetFailState("Plugin configuration error");
 }
 
 
 /**
- * --------------------------------------------------------------------
+ * ----------------------------------------------------------------------
  *      __  ____
  *     /  |/  (_)__________
  *    / /|_/ / // ___/ ___/
  *   / /  / / /(__  ) /__
  *  /_/  /_/_//____/\___/
  *
- * --------------------------------------------------------------------
+ * ----------------------------------------------------------------------
 */
 
 /* Config_End()
  *
  * Checks GunMenu config file from sourcemod/configs directory.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 CheckConfig(const String:ini_file[])
 {
 	// Loads weapons config from configs directory
@@ -788,7 +788,7 @@ CheckConfig(const String:ini_file[])
 /* CheckCloseHandle()
  *
  * Checks if handle is closed or not and close handle.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 CheckCloseHandle(&Handle:handle)
 {
 	// Check and close handle if not closed yet
@@ -802,9 +802,9 @@ CheckCloseHandle(&Handle:handle)
 /* IsValidClient()
  *
  * Checks if a client is valid.
- * -------------------------------------------------------------------- */
+ * ---------------------------------------------------------------------- */
 bool:IsValidClient(client)
 {
-	// Default 'valid player' check. Since its a boolean, we should return true or false
+	// Default 'valid player' check. Since its a bool, we must return true or false
 	return (client > 0 && IsClientInGame(client) && IsPlayerAlive(client) && GetClientTeam(client) > TEAM_SPECTATOR) ? true : false;
 }
