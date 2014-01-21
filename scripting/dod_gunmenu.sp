@@ -8,9 +8,6 @@
 * Changelog & more info at http://goo.gl/4nKhJ
 */
 
-#pragma semicolon 1
-
-// ====[ INCLUDES ]======================================================
 #include <sdktools>
 
 // ====[ CONSTANTS ]=====================================================
@@ -19,9 +16,9 @@
 
 #define DOD_MAXPLAYERS       33
 #define MAX_WEAPON_LENGTH    24
+#define RANDOM_WEAPON        13 // just in case...
 #define PRIMARY_WEAPON_COUNT 12
 #define DEFAULT_WEAPON_COUNT 4
-#define RANDOM_WEAPON        0x12
 #define TEAM_SPECTATOR       1
 #define SHOW_MENU            -1
 
@@ -68,7 +65,7 @@ public Plugin:myinfo =
 	description = "Provides a menu to choose allowed weapons which are automatically given at respawn",
 	version     = PLUGIN_VERSION,
 	url         = "http://dodsplugins.com/"
-};
+}
 
 
 /**
@@ -95,10 +92,11 @@ public OnPluginStart()
 	guns_saveweapons = CreateConVar("dod_guns_saveweapons", "1", "Whether or not save preferenced weapons and automatically give them on respawn", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 
 	// Create/register gunmenu commands
-	RegConsoleCmd("guns",    Command_GunMenu);
-	RegConsoleCmd("weapons", Command_GunMenu);
-	RegConsoleCmd("gunmenu", Command_GunMenu);
+	RegConsoleCmd("sm_guns",    Command_GunMenu);
+	RegConsoleCmd("sm_weapons", Command_GunMenu);
+	RegConsoleCmd("sm_gunmenu", Command_GunMenu);
 
+	// Hook event after player spawns
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 
 	// Create trie with weapon names
@@ -132,17 +130,12 @@ public OnMapStart()
  * ---------------------------------------------------------------------- */
 public OnClientPutInServer(client)
 {
-	// Show menu to humans
-	if (!IsFakeClient(client))
-	{
-		PrimaryIndex[client]   = SHOW_MENU;
-		SecondaryIndex[client] = SHOW_MENU;
-		MeleeIndex[client]     = SHOW_MENU;
-		GrenadeIndex[client]   = SHOW_MENU;
-	}
-
-	// Give random weapons to bots
-	else PrimaryIndex[client] = RANDOM_WEAPON;
+	// Show gun menu to normal players
+	PrimaryIndex[client]   =
+	SecondaryIndex[client] =
+	MeleeIndex[client]     =
+	GrenadeIndex[client]   =
+	(IsFakeClient(client)) ? RANDOM_WEAPON : SHOW_MENU;
 }
 
 /* OnClientSayCommand()
@@ -327,15 +320,15 @@ InitializeMenus()
 	MeleeMenu     = CreateMenu(MenuHandler_ChooseMelee,     MenuAction_Display|MenuAction_Select|MenuAction_Cancel);
 	GrenadesMenu  = CreateMenu(MenuHandler_ChooseGrenades,  MenuAction_Display|MenuAction_Select|MenuAction_Cancel);
 
-	// Set its title
+	// Set titles of all menus
 	SetMenuTitle(PrimaryMenu,   "Choose a Primary Weapon:");
 	SetMenuTitle(SecondaryMenu, "Choose a Secondary Weapon:");
 	SetMenuTitle(MeleeMenu,     "Choose a Melee Weapon:");
 	SetMenuTitle(GrenadesMenu,  "Choose a Grenades:");
 
 	// Add 'random' selec option to primary and secondary weapon sections
-	AddMenuItem(PrimaryMenu,   "12", "Random");
-	AddMenuItem(SecondaryMenu, "12", "Random");
+	AddMenuItem(PrimaryMenu,   "13", "Random");
+	AddMenuItem(SecondaryMenu, "13", "Random");
 }
 
 /* MenuHandler_ChoosePrimary()
@@ -352,7 +345,7 @@ public MenuHandler_ChoosePrimary(Handle:menu, MenuAction:action, client, param)
 			decl String:weapon_id[4];
 			GetMenuItem(menu, param, weapon_id, sizeof(weapon_id));
 
-			PrimaryIndex[client] = StringToInt(weapon_id, 16);
+			PrimaryIndex[client] = StringToInt(weapon_id);
 
 			// Give correct weapon to a player
 			GivePrimary(client);
@@ -365,7 +358,9 @@ public MenuHandler_ChoosePrimary(Handle:menu, MenuAction:action, client, param)
 			if (param == MenuCancel_Exit) // CancelClientMenu sends MenuCancel_Interrupted reason
 			{
 				if (SecondaryMenu != INVALID_HANDLE)
+				{
 					DisplayMenu(SecondaryMenu, client, MENU_TIME_FOREVER);
+				}
 			}
 		}
 	}
@@ -385,7 +380,7 @@ public MenuHandler_ChooseSecondary(Handle:menu, MenuAction:action, client, param
 			decl String:weapon_id[4];
 			GetMenuItem(menu, param, weapon_id, sizeof(weapon_id));
 
-			SecondaryIndex[client] = StringToInt(weapon_id, 16);
+			SecondaryIndex[client] = StringToInt(weapon_id);
 			GiveSecondary(client);
 
 			DisplayMenu(MeleeMenu, client, MENU_TIME_FOREVER);
@@ -396,7 +391,9 @@ public MenuHandler_ChooseSecondary(Handle:menu, MenuAction:action, client, param
 			if (param == MenuCancel_Exit)
 			{
 				if (MeleeMenu != INVALID_HANDLE)
+				{
 					DisplayMenu(MeleeMenu, client, MENU_TIME_FOREVER);
+				}
 			}
 		}
 	}
@@ -417,7 +414,7 @@ public MenuHandler_ChooseMelee(Handle:menu, MenuAction:action, client, param)
 			// Give weapon which is covered under this title
 			GetMenuItem(menu, param, weapon_id, sizeof(weapon_id));
 
-			MeleeIndex[client] = StringToInt(weapon_id, 16);
+			MeleeIndex[client] = StringToInt(weapon_id);
 			GiveMelee(client);
 
 			DisplayMenu(GrenadesMenu, client, MENU_TIME_FOREVER);
@@ -427,9 +424,12 @@ public MenuHandler_ChooseMelee(Handle:menu, MenuAction:action, client, param)
 			// Client pressed exit on a melee weapon menu, call last grenade menu
 			if (param == MenuCancel_Exit)
 			{
-				// Call only if menu is valid (ie config have Grenades section)
+				// Call only if menu is valid (i.e config have Grenades section)
 				if (GrenadesMenu != INVALID_HANDLE)
+				{
+					// Show latest menu with grenades
 					DisplayMenu(GrenadesMenu, client, MENU_TIME_FOREVER);
+				}
 			}
 		}
 	}
@@ -447,7 +447,7 @@ public MenuHandler_ChooseGrenades(Handle:menu, MenuAction:action, client, param)
 		decl String:weapon_id[4];
 		GetMenuItem(menu, param, weapon_id, sizeof(weapon_id));
 
-		GrenadeIndex[client] = StringToInt(weapon_id, 16);
+		GrenadeIndex[client] = StringToInt(weapon_id);
 		GiveGrenades(client);
 	}
 }
@@ -473,9 +473,9 @@ GivePrimary(client)
 	// Get primary weapon index
 	new weapon = PrimaryIndex[client];
 
-	// Check if player has chosen random
-	if (weapon == RANDOM_WEAPON) weapon = GetRandomInt(0, PrimaryGuns_Count -1);
-	if (weapon >= 0 && weapon <= PrimaryGuns_Count)
+	// Check if player has chosen random weapon
+	if (weapon == RANDOM_WEAPON) weapon = GetRandomInt(0, PrimaryGuns_Count - 1);
+	if (0 <= weapon < PrimaryGuns_Count)
 	{
 		RemoveWeaponBySlot(client, Slot_Primary);
 		GivePlayerItem(client, PrimaryGuns[weapon]);
@@ -486,10 +486,10 @@ GivePrimary(client)
 GiveSecondary(client)
 {
 	new weapon = SecondaryIndex[client];
-	if (weapon == RANDOM_WEAPON) weapon = GetRandomInt(0, SecondaryGuns_Count -1);
+	if (weapon == RANDOM_WEAPON) weapon = GetRandomInt(0, SecondaryGuns_Count - 1);
 
 	// Include zero index, because if client choose a random weapon, he may not take it
-	if (weapon >= 0 && weapon <= SecondaryGuns_Count)
+	if (0 <= weapon < SecondaryGuns_Count)
 	{
 		// Remove old secondary weapon
 		RemoveWeaponBySlot(client, Slot_Secondary);
@@ -501,7 +501,7 @@ GiveSecondary(client)
 GiveMelee(client)
 {
 	new weapon = MeleeIndex[client];
-	if (weapon >= 0 && weapon <= MeleeWeapons_Count)
+	if (0 <= weapon < MeleeWeapons_Count)
 	{
 		RemoveWeaponBySlot(client, Slot_Melee);
 
@@ -515,7 +515,7 @@ GiveGrenades(client)
 	new weapon = GrenadeIndex[client];
 
 	// No random here - no check
-	if (weapon >= 0 && weapon <= Grenades_Count)
+	if (0 <= weapon < Grenades_Count)
 	{
 		RemoveWeaponBySlot(client, Slot_Grenade);
 		GivePlayerItem(client, Grenades[weapon]);
@@ -568,7 +568,7 @@ SetAmmo(client, Slots:slot)
  * ---------------------------------------------------------------------- */
 RemoveWeaponBySlot(client, Slots:slot)
 {
-	// Checking slot
+	// Get slot which should be removed
 	new weapon = GetPlayerWeaponSlot(client, _:slot);
 
 	// Checking if weapon is valid
@@ -604,10 +604,7 @@ ParseConfigFile(const String:file[])
 	SMC_SetParseEnd(parser, Config_End);
 
 	// Checking for error
-	decl String:error[128];
-	new line = 0;
-	new col  = 0;
-	new SMCError:result = SMC_ParseFile(parser, file, line, col);
+	new String:error[128], line, col, SMCError:result = SMC_ParseFile(parser, file, line, col);
 
 	// Close handle
 	CloseHandle(parser);
@@ -761,7 +758,10 @@ public SMCResult:Config_EndSection(Handle:parser)
 public Config_End(Handle:parser, bool:halted, bool:failed)
 {
 	// Failed to load config. Maybe we missed a braket or something?
-	if (failed) SetFailState("Plugin configuration error");
+	if (failed)
+	{
+		SetFailState("Plugin configuration error!");
+	}
 }
 
 
@@ -796,5 +796,5 @@ CheckCloseHandle(&Handle:handle)
  * ---------------------------------------------------------------------- */
 bool:IsValidClient(client)
 {
-	return (client > 0 && client <= MaxClients && IsClientInGame(client) && IsPlayerAlive(client) && GetClientTeam(client) > TEAM_SPECTATOR) ? true : false;
+	return (1 <= client <= MaxClients && IsClientInGame(client) && IsPlayerAlive(client) && GetClientTeam(client) > TEAM_SPECTATOR) ? true : false;
 }
