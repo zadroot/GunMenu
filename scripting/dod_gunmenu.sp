@@ -85,6 +85,10 @@ public Plugin:myinfo =
  * ---------------------------------------------------------------------- */
 public OnPluginStart()
 {
+	// Cache send property offset (for ammo setup)
+	if ((m_iAmmo = FindSendPropOffs("CDODPlayer", "m_iAmmo")) == -1)
+		SetFailState("Fatal Error: Unable to find prop offset \"CDODPlayer::m_iAmmo\"!");
+
 	// Create plugin ConVars
 	CreateConVar("dod_gunmenu_version", PLUGIN_VERSION, PLUGIN_NAME, FCVAR_NOTIFY|FCVAR_DONTRECORD);
 	guns_enablemenu  = CreateConVar("dod_guns_enablemenu",  "1", "Whether or not show gun menu at every respawn",                                  FCVAR_PLUGIN, true, 0.0, true, 1.0);
@@ -102,10 +106,6 @@ public OnPluginStart()
 	// Create trie with weapon names
 	WeaponsTrie = CreateTrie();
 	AutoExecConfig(true, "dod_gunmenu");
-
-	// Cache send property offset (for ammo setup)
-	if ((m_iAmmo = FindSendPropOffs("CDODPlayer", "m_iAmmo")) == -1)
-		SetFailState("Fatal Error: Unable to find prop offset \"CDODPlayer::m_iAmmo\"!");
 }
 
 /* OnMapStart()
