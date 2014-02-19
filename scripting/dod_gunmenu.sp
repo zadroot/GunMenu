@@ -535,7 +535,7 @@ SetAmmo(client, Slots:slot)
 	new weapon = GetPlayerWeaponSlot(client, _:slot);
 
 	// Checking if weapon is valid
-	if (IsValidEntity(weapon))
+	if (IsValidEdict(weapon))
 	{
 		// I dont know how its working, but its working very well!
 		switch (GetEntProp(weapon, Prop_Send, "m_iPrimaryAmmoType"))
@@ -547,7 +547,7 @@ SetAmmo(client, Slots:slot)
 			case 5:  SetEntData(client, m_iAmmo + 20,  60); /* K98+scoped */
 			case 6:  SetEntData(client, m_iAmmo + 24,  30); /* M1 Carbine */
 			case 7:  SetEntData(client, m_iAmmo + 28,  50); /* Spring */
-			case 8:  SetEntData(client, m_iAmmo + 32, 180); /* Thompson, MP40 & STG44 */
+			case 8:  SetEntData(client, m_iAmmo + 32, 180); /* Thompson, MP40 and STG44 */
 			case 9:  SetEntData(client, m_iAmmo + 36, 240); /* BAR */
 			case 10: SetEntData(client, m_iAmmo + 40, 300); /* 30cal */
 			case 11: SetEntData(client, m_iAmmo + 44, 250); /* MG42 */
@@ -572,7 +572,7 @@ RemoveWeaponBySlot(client, Slots:slot)
 	new weapon = GetPlayerWeaponSlot(client, _:slot);
 
 	// Checking if weapon is valid
-	if (IsValidEntity(weapon))
+	if (IsValidEdict(weapon))
 	{
 		// Proper weapon removing
 		RemovePlayerItem(client, weapon);
